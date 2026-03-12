@@ -506,28 +506,17 @@ class RoomLayoutVisualizer:
         Constraints:
         1. First strip starts flush at x=0
         2. Last strip ends flush at room_width
-        3. Outer gaps are THE SAME SIZE on both left and right (to center both lights symmetrically)
+        3. Outer gap + strip width = nightstand width (lights centered in gaps over nightstands)
         4. Inner gaps fill the remaining space evenly
 
-        All gaps are AUTO-CALCULATED based on strip width and light positions.
-        The outer gap size is calculated as the average of what would center each light,
-        ensuring both outer gaps are equal (only 2 gap sizes total).
+        Outer gap is sized so that (strip + gap) equals nightstand width.
         """
         num_inner_gaps = int(self.config["num_inner_gaps"])
 
-        # Get light positions
-        wall_gap = self.config["wall_gap"]
+        # Outer gap + strip width = nightstand width
+        # This centers the lights in the gaps over the nightstands
         nightstand_width = self.config["nightstand_width"]
-        left_light_x = wall_gap + nightstand_width / 2
-        right_light_x = self.config["right_light_from_left_wall"]
-
-        # Calculate what outer gap would center each light
-        left_outer_gap_calc = 2 * (left_light_x - strip_width)
-        right_outer_gap_calc = 2 * (room_width - strip_width - right_light_x)
-
-        # Use the SAME outer gap for both sides (average of the two calculations)
-        # This ensures only 2 gap sizes total (outer and inner)
-        outer_gap = (left_outer_gap_calc + right_outer_gap_calc) / 2
+        outer_gap = nightstand_width - strip_width
         if outer_gap < 1:
             outer_gap = 1
 
@@ -1091,7 +1080,7 @@ class RoomLayoutVisualizer:
 
         # Lights (on the wall, not nightstands)
         lights = positions["lights"]
-        light_z = bed_height + 24  # On wall, above bed height
+        light_z = bed_height + 12  # On wall, lower than horizontal strip
         light_y = total_room_depth - 1  # On the wall surface
         light_radius = 3
 

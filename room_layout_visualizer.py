@@ -1073,17 +1073,17 @@ class RoomLayoutVisualizer:
             ))
 
         # Horizontal strip across all vertical strips (headboard look)
+        # Extends from first vertical strip all the way to the right wall edge
         if strips:
             first_strip_x = strips[0]["x"]
-            last_strip = strips[-1]
-            last_strip_x_end = last_strip["x"] + last_strip["width"]
-            horizontal_strip_width = last_strip_x_end - first_strip_x
+            horizontal_strip_end = room_width  # Extend to right wall edge
+            horizontal_strip_width = horizontal_strip_end - first_strip_x
             horizontal_strip_height = 4  # Horizontal strip thickness
             horizontal_strip_z = bed_height + headboard_height - horizontal_strip_height / 2
 
             fig.add_trace(go.Mesh3d(
-                x=[first_strip_x, last_strip_x_end, last_strip_x_end, first_strip_x,
-                   first_strip_x, last_strip_x_end, last_strip_x_end, first_strip_x],
+                x=[first_strip_x, horizontal_strip_end, horizontal_strip_end, first_strip_x,
+                   first_strip_x, horizontal_strip_end, horizontal_strip_end, first_strip_x],
                 y=[strip_y_start, strip_y_start, total_room_depth, total_room_depth, strip_y_start, strip_y_start, total_room_depth, total_room_depth],
                 z=[horizontal_strip_z, horizontal_strip_z, horizontal_strip_z, horizontal_strip_z,
                    horizontal_strip_z + horizontal_strip_height, horizontal_strip_z + horizontal_strip_height,

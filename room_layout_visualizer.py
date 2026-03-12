@@ -526,52 +526,50 @@ class RoomLayoutVisualizer:
         # Build the strip list
         strips = []
 
-        # LEFT OUTER: Strip + 15" gap + Strip
+        # LEFT SIDE: Strip at 0, then 15" gap
         strips.append({"x": 0, "width": strip_width})
-        current_x = strip_width + outer_gap
-        strips.append({"x": current_x, "width": strip_width})
-        current_x += strip_width
 
-        # INNER ZONE: Variable gaps based on num_inner_gaps
-        # Calculate space for inner zone
-        # From end of left outer to where right side pattern needs to start
+        # INNER ZONE starts after the 15" gap
+        # The strip at (strip_width + outer_gap) is the FIRST inner strip
+        inner_zone_start = strip_width + outer_gap
 
-        # Right side pattern: ...gap(15") + Strip + gap(15") + Strip + gap(15") + Strip (at wall)
-        # Find where the gap containing the right light is
+        # Calculate where right side pattern needs to start
         right_light_x = self.config["right_light_from_left_wall"]
 
         # The gap containing right light has its center at right_light_x
         # Gap runs from (right_light_x - outer_gap/2) to (right_light_x + outer_gap/2)
         right_light_gap_start = right_light_x - outer_gap / 2
-        right_light_gap_end = right_light_x + outer_gap / 2
 
-        # Strip before this gap
-        strip_before_right_light = right_light_gap_start - strip_width
+        # Strip before this gap (this is the LAST inner strip)
+        last_inner_strip_x = right_light_gap_start - strip_width
 
-        # This is where inner zone ends
-        inner_zone_end = strip_before_right_light
-        inner_zone_width = inner_zone_end - current_x
+        # Inner zone width: from START of first inner strip to START of last inner strip
+        # This distance contains: (num_inner_gaps) strips + (num_inner_gaps) gaps
+        # Because: first strip, gap, strip, gap, strip, ..., gap, last strip
+        #          └─────── num_inner_gaps × (strip + gap) ────────┘
+        inner_zone_width = last_inner_strip_x - inner_zone_start
 
         # Calculate inner gap size
-        # inner_zone has num_inner_gaps gaps and (num_inner_gaps + 1) strips
         if num_inner_gaps > 0:
-            total_inner_strips = num_inner_gaps + 1
-            total_strip_width = total_inner_strips * strip_width
-            remaining_for_gaps = inner_zone_width - total_strip_width
-            inner_gap = remaining_for_gaps / num_inner_gaps
+            # inner_zone_width = num_inner_gaps * strip_width + num_inner_gaps * inner_gap
+            # inner_gap = (inner_zone_width - num_inner_gaps * strip_width) / num_inner_gaps
+            inner_gap = (inner_zone_width - num_inner_gaps * strip_width) / num_inner_gaps
         else:
-            inner_gap = inner_zone_width - strip_width
+            # Only one strip in inner zone, no gaps
+            inner_gap = 0
 
         if inner_gap < 0:
             inner_gap = 0
 
-        # Add inner strips
+        # Add inner strips (these include the strips that appear after the left 15" gap)
+        current_x = inner_zone_start
         for i in range(num_inner_gaps + 1):
             strips.append({"x": current_x, "width": strip_width})
             current_x += strip_width + inner_gap
 
-        # RIGHT SIDE: Continue with outer_gap pattern to wall
-        current_x = strip_before_right_light
+        # RIGHT SIDE: Continue with outer_gap pattern from after last inner strip
+        # Start at the position after last inner strip + outer_gap
+        current_x = last_inner_strip_x + strip_width + outer_gap
         while current_x + strip_width <= room_width:
             strips.append({"x": current_x, "width": strip_width})
             current_x += strip_width + outer_gap

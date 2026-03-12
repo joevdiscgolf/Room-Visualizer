@@ -23,7 +23,8 @@ with st.sidebar:
     st.header("Render Mode")
     render_mode = st.radio(
         "View",
-        ["2D", "3D"]
+        ["2D", "3D"],
+        index=1  # Default to 3D
     )
 
     st.header("Layout Mode")

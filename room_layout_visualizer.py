@@ -266,9 +266,10 @@ class RoomLayoutVisualizer:
         num_strips = len(strip_data["strips"])
         gap_width = strip_data.get("gap_width", 0)
         mode = strip_data.get("mode", "even")
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
 
         self.ax.set_xlim(-10, self.config["room_width"] + 10)
-        self.ax.set_ylim(-25, bed_depth + 55)
+        self.ax.set_ylim(-25, total_room_depth + 15)
         self.ax.set_xlabel('Distance from Left Wall (inches)', fontsize=11, fontweight='bold')
         self.ax.set_ylabel('Depth from Wall (inches)', fontsize=11, fontweight='bold')
         self.ax.set_aspect('equal')
@@ -496,14 +497,17 @@ class RoomLayoutVisualizer:
     def _calculate_variable_gaps(self, num_strips, strip_width, room_width, bed_x, bed_width):
         """Calculate strip positions with variable gap sizes.
 
-        Pattern: |S|--outer--|S|--outer(L centered)|S|--inner--|S|--inner--|S|--outer(R centered)|S|--outer--|S|
+        Pattern: |S|--left_outer--|S|--inner--|S|--inner--|S|--right_outer--|S|
 
-        The algorithm:
-        1. Calculate where the left light gap must be (so left light is centered in outer_gap)
-        2. Calculate where the right light gap must be (so right light is centered in outer_gap)
-        3. Auto-calculate inner_gap size to fill the space between with num_inner_gaps gaps
+        Constraints:
+        1. First strip starts flush at x=0
+        2. Last strip ends flush at room_width
+        3. Left light is centered in the gap after the first strip
+        4. Right light is centered in the gap before the last strip
+        5. Inner gaps fill the remaining space evenly
+
+        All gaps are AUTO-CALCULATED based on strip width and light positions.
         """
-        outer_gap = self.config["outer_gap_size"]
         num_inner_gaps = int(self.config["num_inner_gaps"])
 
         # Get light positions
@@ -512,73 +516,62 @@ class RoomLayoutVisualizer:
         left_light_x = wall_gap + nightstand_width / 2
         right_light_x = self.config["right_light_from_left_wall"]
 
-        # Calculate where the left light gap must START for the light to be centered
-        # If light is at 12" and gap is 15", gap goes from (12 - 7.5) to (12 + 7.5) = 4.5 to 19.5
-        left_gap_start = left_light_x - (outer_gap / 2)
-        left_gap_end = left_light_x + (outer_gap / 2)
+        # Auto-calculate left outer gap to center left light in gap after first strip
+        # First strip: 0 to strip_width
+        # Gap after first strip: strip_width to (strip_width + left_outer_gap)
+        # For light to be centered: strip_width + left_outer_gap/2 = left_light_x
+        # left_outer_gap = 2 * (left_light_x - strip_width)
+        left_outer_gap = 2 * (left_light_x - strip_width)
+        if left_outer_gap < 1:
+            left_outer_gap = 1
 
-        # Calculate where the right light gap must START for the light to be centered
-        right_gap_start = right_light_x - (outer_gap / 2)
-        right_gap_end = right_light_x + (outer_gap / 2)
+        # Auto-calculate right outer gap to center right light in gap before last strip
+        # Last strip: (room_width - strip_width) to room_width
+        # Gap before last strip: (room_width - strip_width - right_outer_gap) to (room_width - strip_width)
+        # For light to be centered: (room_width - strip_width) - right_outer_gap/2 = right_light_x
+        # right_outer_gap = 2 * (room_width - strip_width - right_light_x)
+        right_outer_gap = 2 * (room_width - strip_width - right_light_x)
+        if right_outer_gap < 1:
+            right_outer_gap = 1
 
-        # The strip before the left light gap ends at left_gap_start
-        # The strip after the left light gap starts at left_gap_end
-        # The strip before the right light gap ends at right_gap_start
-
-        # Space available for inner gaps + strips (between left_gap_end and right_gap_start)
-        inner_zone_start = left_gap_end
-        inner_zone_end = right_gap_start
+        # Calculate inner zone boundaries
+        # After first strip and left outer gap
+        inner_zone_start = strip_width + left_outer_gap
+        # Before right outer gap and last strip
+        inner_zone_end = room_width - strip_width - right_outer_gap
         inner_zone_width = inner_zone_end - inner_zone_start
 
-        # We need (num_inner_gaps + 1) strips to create num_inner_gaps gaps
-        # Total = (num_inner_gaps + 1) * strip_width + num_inner_gaps * inner_gap = inner_zone_width
-        # Solving for inner_gap:
-        # inner_gap = (inner_zone_width - (num_inner_gaps + 1) * strip_width) / num_inner_gaps
+        # Calculate inner gap size
+        # Inner zone contains (num_inner_gaps + 1) strips and num_inner_gaps gaps
+        # inner_zone_width = (num_inner_gaps + 1) * strip_width + num_inner_gaps * inner_gap
         if num_inner_gaps > 0:
             inner_gap = (inner_zone_width - (num_inner_gaps + 1) * strip_width) / num_inner_gaps
         else:
-            inner_gap = 0
+            inner_gap = inner_zone_width - strip_width  # Just one strip in the middle
 
-        # Make sure inner_gap is not negative
         if inner_gap < 0:
             inner_gap = 0
 
-        # Now build the strip list
+        # Build the strip list
         strips = []
 
-        # Phase 1: Strips before the left light gap (starting flush at x=0)
-        current_x = 0
-        while current_x + strip_width <= left_gap_start:
-            strips.append({"x": current_x, "width": strip_width})
-            current_x += strip_width + outer_gap
+        # First strip (flush with left wall)
+        strips.append({"x": 0, "width": strip_width})
 
-        # Make sure last strip before left gap ends at left_gap_start
-        # Adjust if needed by placing a strip that ends exactly at left_gap_start
-        if strips:
-            last_strip_end = strips[-1]["x"] + strip_width
-            if last_strip_end < left_gap_start - 0.1:
-                # Need another strip
-                strips.append({"x": left_gap_start - strip_width, "width": strip_width})
-        else:
-            # First strip ends at left_gap_start
-            strips.append({"x": left_gap_start - strip_width, "width": strip_width})
-
-        # Phase 2: Strips in the inner zone (after left light gap, before right light gap)
+        # Inner zone strips
         current_x = inner_zone_start
         for i in range(num_inner_gaps + 1):
-            if current_x + strip_width <= inner_zone_end + 0.1:
-                strips.append({"x": current_x, "width": strip_width})
-                current_x += strip_width + inner_gap
-
-        # Phase 3: Strips after the right light gap
-        current_x = right_gap_end
-        while current_x + strip_width <= room_width and len(strips) < num_strips:
             strips.append({"x": current_x, "width": strip_width})
-            current_x += strip_width + outer_gap
+            current_x += strip_width + inner_gap
+
+        # Last strip (flush with right wall)
+        strips.append({"x": room_width - strip_width, "width": strip_width})
 
         return {
             "strips": strips,
-            "outer_gap": outer_gap,
+            "outer_gap": (left_outer_gap + right_outer_gap) / 2,  # Average for display
+            "left_outer_gap": left_outer_gap,
+            "right_outer_gap": right_outer_gap,
             "inner_gap": inner_gap,
             "num_inner_gaps": num_inner_gaps,
             "mode": "variable",
@@ -607,10 +600,11 @@ class RoomLayoutVisualizer:
         """Draw room walls."""
         room_width = self.config["room_width"]
         bed_depth = self.config["bed_depth"]
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
 
         # Floor
         floor = patches.Rectangle(
-            (0, 0), room_width, bed_depth + 20,
+            (0, 0), room_width, total_room_depth,
             linewidth=0, facecolor='#f5f5dc', alpha=0.3, zorder=0
         )
         self.ax.add_patch(floor)
@@ -622,51 +616,53 @@ class RoomLayoutVisualizer:
         self.ax.axvline(x=room_width, color='#654321', linewidth=4, zorder=1)
 
         # Back wall (headboard wall)
-        self.ax.axhline(y=bed_depth + 20, color='#654321', linewidth=4, linestyle='-', zorder=1)
+        self.ax.axhline(y=total_room_depth, color='#654321', linewidth=4, linestyle='-', zorder=1)
 
         # Add wall labels
-        self.ax.text(-5, bed_depth + 10, 'Left\nWall', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
-        self.ax.text(room_width + 5, bed_depth + 10, 'Right\nWall', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
-        self.ax.text(room_width / 2, bed_depth + 25, 'Back Wall (Headboard)', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
+        self.ax.text(-5, total_room_depth / 2, 'Left\nWall', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
+        self.ax.text(room_width + 5, total_room_depth / 2, 'Right\nWall', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
+        self.ax.text(room_width / 2, total_room_depth + 5, 'Back Wall (Headboard)', ha='center', va='center', fontsize=10, fontweight='bold', color='#654321')
 
     def _draw_nightstands(self, positions):
         """Draw nightstands."""
         left_ns = positions["left_nightstand"]
         right_ns = positions["right_nightstand"]
         bed_depth = self.config["bed_depth"]
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
         ns_depth = 20  # Nightstand depth
+        ns_y_start = total_room_depth - ns_depth  # Flush against back wall
 
         # Left nightstand (with shadow)
         shadow_left = patches.Rectangle(
-            (left_ns["x"] + 1, (bed_depth / 2) - (ns_depth / 2) + 1), left_ns["width"], ns_depth,
+            (left_ns["x"] + 1, ns_y_start + 1), left_ns["width"], ns_depth,
             linewidth=0, facecolor='gray', alpha=0.3, zorder=2
         )
         self.ax.add_patch(shadow_left)
 
         rect_left = patches.Rectangle(
-            (left_ns["x"], (bed_depth / 2) - (ns_depth / 2)), left_ns["width"], ns_depth,
+            (left_ns["x"], ns_y_start), left_ns["width"], ns_depth,
             linewidth=2, edgecolor='#654321', facecolor='#daa520', label='Nightstands', zorder=3
         )
         self.ax.add_patch(rect_left)
         self.ax.text(
-            left_ns["x"] + left_ns["width"] / 2, bed_depth / 2,
+            left_ns["x"] + left_ns["width"] / 2, ns_y_start + ns_depth / 2,
             'Left\nNightstand', ha='center', va='center', fontsize=9, fontweight='bold', color='white'
         )
 
         # Right nightstand (with shadow)
         shadow_right = patches.Rectangle(
-            (right_ns["x"] + 1, (bed_depth / 2) - (ns_depth / 2) + 1), right_ns["width"], ns_depth,
+            (right_ns["x"] + 1, ns_y_start + 1), right_ns["width"], ns_depth,
             linewidth=0, facecolor='gray', alpha=0.3, zorder=2
         )
         self.ax.add_patch(shadow_right)
 
         rect_right = patches.Rectangle(
-            (right_ns["x"], (bed_depth / 2) - (ns_depth / 2)), right_ns["width"], ns_depth,
+            (right_ns["x"], ns_y_start), right_ns["width"], ns_depth,
             linewidth=2, edgecolor='#654321', facecolor='#daa520', zorder=3
         )
         self.ax.add_patch(rect_right)
         self.ax.text(
-            right_ns["x"] + right_ns["width"] / 2, bed_depth / 2,
+            right_ns["x"] + right_ns["width"] / 2, ns_y_start + ns_depth / 2,
             'Right\nNightstand', ha='center', va='center', fontsize=9, fontweight='bold', color='white'
         )
 
@@ -674,30 +670,32 @@ class RoomLayoutVisualizer:
         """Draw bed."""
         bed = positions["bed"]
         bed_depth = self.config["bed_depth"]
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
+        bed_y_start = total_room_depth - bed_depth  # Flush against back wall
 
         # Shadow
         shadow_bed = patches.Rectangle(
-            (bed["x"] + 2, 2), bed["width"], bed_depth,
+            (bed["x"] + 2, bed_y_start + 2), bed["width"], bed_depth,
             linewidth=0, facecolor='gray', alpha=0.3, zorder=2
         )
         self.ax.add_patch(shadow_bed)
 
         # Mattress
         mattress = patches.Rectangle(
-            (bed["x"], 0), bed["width"], bed_depth,
+            (bed["x"], bed_y_start), bed["width"], bed_depth,
             linewidth=3, edgecolor='#2c3e50', facecolor='#3498db', alpha=0.7, label='Bed', zorder=3
         )
         self.ax.add_patch(mattress)
 
-        # Pillows at head (top)
+        # Pillows at head (top - against wall)
         pillow_height = bed_depth * 0.2
         pillow1 = patches.Rectangle(
-            (bed["x"] + bed["width"] * 0.1, bed_depth - pillow_height - 2),
+            (bed["x"] + bed["width"] * 0.1, total_room_depth - pillow_height - 2),
             bed["width"] * 0.35, pillow_height,
             linewidth=1, edgecolor='white', facecolor='#ecf0f1', alpha=0.8, zorder=4
         )
         pillow2 = patches.Rectangle(
-            (bed["x"] + bed["width"] * 0.55, bed_depth - pillow_height - 2),
+            (bed["x"] + bed["width"] * 0.55, total_room_depth - pillow_height - 2),
             bed["width"] * 0.35, pillow_height,
             linewidth=1, edgecolor='white', facecolor='#ecf0f1', alpha=0.8, zorder=4
         )
@@ -706,7 +704,7 @@ class RoomLayoutVisualizer:
 
         # Label
         self.ax.text(
-            bed["x"] + bed["width"] / 2, bed_depth / 2,
+            bed["x"] + bed["width"] / 2, bed_y_start + bed_depth / 2,
             f'BED\n{bed["width"]:.1f}" × {bed_depth:.1f}"',
             ha='center', va='center', fontsize=11, fontweight='bold', color='white'
         )
@@ -845,7 +843,8 @@ class RoomLayoutVisualizer:
         """Draw light positions."""
         lights = positions["lights"]
         bed_depth = self.config["bed_depth"]
-        light_y = bed_depth / 2  # Center lights vertically with bed
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
+        light_y = total_room_depth  # On the back wall
 
         # Left light (with glow effect)
         glow_left = patches.Circle(
@@ -858,10 +857,6 @@ class RoomLayoutVisualizer:
         )
         self.ax.add_patch(circle_left)
 
-        # Beam to headboard
-        self.ax.plot([lights["left"], lights["left"]], [light_y, bed_depth + 5],
-                    '#ffa500', linestyle='--', linewidth=2, alpha=0.6, zorder=5)
-
         # Right light (with glow effect)
         glow_right = patches.Circle(
             (lights["right"], light_y), 5, color='#ffd700', alpha=0.2, zorder=6
@@ -873,29 +868,26 @@ class RoomLayoutVisualizer:
         )
         self.ax.add_patch(circle_right)
 
-        # Beam to headboard
-        self.ax.plot([lights["right"], lights["right"]], [light_y, bed_depth + 5],
-                    '#ffa500', linestyle='--', linewidth=2, alpha=0.6, zorder=5)
-
         # Labels
-        self.ax.text(lights["left"], light_y - 8, f'{lights["left"]:.1f}"',
+        self.ax.text(lights["left"], light_y + 8, f'{lights["left"]:.1f}"',
                     ha='center', fontsize=9, color='#ff8c00', fontweight='bold',
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='#ff8c00'))
-        self.ax.text(lights["right"], light_y - 8, f'{lights["right"]:.1f}"',
+        self.ax.text(lights["right"], light_y + 8, f'{lights["right"]:.1f}"',
                     ha='center', fontsize=9, color='#ff8c00', fontweight='bold',
                     bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8, edgecolor='#ff8c00'))
 
     def _draw_dimensions(self, positions):
         """Draw dimension annotations."""
         bed_depth = self.config["bed_depth"]
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
 
         # Room width
         self.ax.annotate(
-            '', xy=(self.config["room_width"], bed_depth + 38), xytext=(0, bed_depth + 38),
+            '', xy=(self.config["room_width"], total_room_depth + 8), xytext=(0, total_room_depth + 8),
             arrowprops=dict(arrowstyle='<->', color='black', lw=2)
         )
         self.ax.text(
-            self.config["room_width"] / 2, bed_depth + 41,
+            self.config["room_width"] / 2, total_room_depth + 11,
             f'Room Width: {self.config["room_width"]:.1f}"',
             ha='center', fontsize=10, fontweight='bold',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='white', alpha=0.9, edgecolor='black', linewidth=1.5)
@@ -910,7 +902,7 @@ class RoomLayoutVisualizer:
 
         self.ax.text(
             self.config["room_width"] / 2, -18,
-            f'Lights (centered on nightstands) - Left: {lights["left"]:.1f}" | Right: {right_light_actual:.1f}" (target: {right_light_constraint:.1f}") {"OK" if match else "X"}',
+            f'Lights (on wall) - Left: {lights["left"]:.1f}" | Right: {right_light_actual:.1f}" (target: {right_light_constraint:.1f}") {"✓" if match else "✗"}',
             ha='center', fontsize=9, color='green' if match else 'red', fontweight='bold',
             bbox=dict(boxstyle='round,pad=0.4', facecolor='white', alpha=0.9, linewidth=1.5)
         )
@@ -925,7 +917,9 @@ class RoomLayoutVisualizer:
 
         room_width = self.config["room_width"]
         bed_depth = self.config["bed_depth"]
+        total_room_depth = bed_depth + 48  # Add 48" at foot of bed
         wall_height = 100  # Height of walls in inches
+        headboard_height = 48  # Strips go ~48" above bed (about bed height)
 
         # Create figure
         fig = go.Figure()
@@ -933,7 +927,7 @@ class RoomLayoutVisualizer:
         # Floor
         fig.add_trace(go.Mesh3d(
             x=[0, room_width, room_width, 0],
-            y=[0, 0, bed_depth + 20, bed_depth + 20],
+            y=[0, 0, total_room_depth, total_room_depth],
             z=[0, 0, 0, 0],
             i=[0, 0],
             j=[1, 2],
@@ -948,7 +942,7 @@ class RoomLayoutVisualizer:
         # Left wall
         fig.add_trace(go.Mesh3d(
             x=[0, 0, 0, 0],
-            y=[0, bed_depth + 20, bed_depth + 20, 0],
+            y=[0, total_room_depth, total_room_depth, 0],
             z=[0, 0, wall_height, wall_height],
             i=[0, 0],
             j=[1, 2],
@@ -963,7 +957,7 @@ class RoomLayoutVisualizer:
         # Right wall
         fig.add_trace(go.Mesh3d(
             x=[room_width, room_width, room_width, room_width],
-            y=[0, bed_depth + 20, bed_depth + 20, 0],
+            y=[0, total_room_depth, total_room_depth, 0],
             z=[0, 0, wall_height, wall_height],
             i=[0, 0],
             j=[1, 2],
@@ -977,7 +971,7 @@ class RoomLayoutVisualizer:
         # Back wall (headboard wall)
         fig.add_trace(go.Mesh3d(
             x=[0, room_width, room_width, 0],
-            y=[bed_depth + 20, bed_depth + 20, bed_depth + 20, bed_depth + 20],
+            y=[total_room_depth, total_room_depth, total_room_depth, total_room_depth],
             z=[0, 0, wall_height, wall_height],
             i=[0, 0],
             j=[1, 2],
@@ -989,14 +983,15 @@ class RoomLayoutVisualizer:
             hoverinfo='skip'
         ))
 
-        # Bed
+        # Bed (flush against back wall)
         bed = positions["bed"]
         bed_height = 24  # Mattress height in inches
         bed_x, bed_width = bed["x"], bed["width"]
+        bed_y_start = total_room_depth - bed_depth  # Flush against back wall
 
         fig.add_trace(go.Mesh3d(
             x=[bed_x, bed_x + bed_width, bed_x + bed_width, bed_x, bed_x, bed_x + bed_width, bed_x + bed_width, bed_x],
-            y=[0, 0, bed_depth, bed_depth, 0, 0, bed_depth, bed_depth],
+            y=[bed_y_start, bed_y_start, total_room_depth, total_room_depth, bed_y_start, bed_y_start, total_room_depth, total_room_depth],
             z=[0, 0, 0, 0, bed_height, bed_height, bed_height, bed_height],
             i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
             j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
@@ -1008,18 +1003,18 @@ class RoomLayoutVisualizer:
             hoverinfo='skip'
         ))
 
-        # Nightstands
+        # Nightstands (flush against back wall)
         left_ns = positions["left_nightstand"]
         right_ns = positions["right_nightstand"]
         ns_depth = 20
         ns_height = 24
-        ns_y = (bed_depth - ns_depth) / 2
+        ns_y_start = total_room_depth - ns_depth  # Flush against back wall
 
         # Left nightstand
         fig.add_trace(go.Mesh3d(
             x=[left_ns["x"], left_ns["x"] + left_ns["width"], left_ns["x"] + left_ns["width"], left_ns["x"],
                left_ns["x"], left_ns["x"] + left_ns["width"], left_ns["x"] + left_ns["width"], left_ns["x"]],
-            y=[ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth, ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth],
+            y=[ns_y_start, ns_y_start, total_room_depth, total_room_depth, ns_y_start, ns_y_start, total_room_depth, total_room_depth],
             z=[0, 0, 0, 0, ns_height, ns_height, ns_height, ns_height],
             i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
             j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
@@ -1035,7 +1030,7 @@ class RoomLayoutVisualizer:
         fig.add_trace(go.Mesh3d(
             x=[right_ns["x"], right_ns["x"] + right_ns["width"], right_ns["x"] + right_ns["width"], right_ns["x"],
                right_ns["x"], right_ns["x"] + right_ns["width"], right_ns["x"] + right_ns["width"], right_ns["x"]],
-            y=[ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth, ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth],
+            y=[ns_y_start, ns_y_start, total_room_depth, total_room_depth, ns_y_start, ns_y_start, total_room_depth, total_room_depth],
             z=[0, 0, 0, 0, ns_height, ns_height, ns_height, ns_height],
             i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
             j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
@@ -1046,11 +1041,13 @@ class RoomLayoutVisualizer:
             hoverinfo='skip'
         ))
 
-        # Headboard strips
+        # Headboard strips (grey, only bed height above furniture)
         strip_data = positions["strips"]
         strips = strip_data["strips"]
-        strip_depth = 3  # Depth of strip coming out from wall
-        strip_y = bed_depth + 20 - strip_depth
+        strip_depth = 2  # Depth of strip coming out from wall
+        strip_y_start = total_room_depth - strip_depth
+        strip_z_start = bed_height  # Start at bed height
+        strip_z_end = bed_height + headboard_height  # End ~48" above bed
 
         for idx, strip in enumerate(strips):
             strip_x = strip["x"]
@@ -1059,21 +1056,48 @@ class RoomLayoutVisualizer:
             fig.add_trace(go.Mesh3d(
                 x=[strip_x, strip_x + strip_width, strip_x + strip_width, strip_x,
                    strip_x, strip_x + strip_width, strip_x + strip_width, strip_x],
-                y=[strip_y, strip_y, bed_depth + 20, bed_depth + 20, strip_y, strip_y, bed_depth + 20, bed_depth + 20],
-                z=[0, 0, 0, 0, wall_height, wall_height, wall_height, wall_height],
+                y=[strip_y_start, strip_y_start, total_room_depth, total_room_depth, strip_y_start, strip_y_start, total_room_depth, total_room_depth],
+                z=[strip_z_start, strip_z_start, strip_z_start, strip_z_start, strip_z_end, strip_z_end, strip_z_end, strip_z_end],
                 i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
                 j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
                 k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
-                color='#8B4513',
+                color='#808080',  # Grey
                 opacity=0.9,
                 name='Headboard Strips' if idx == 0 else None,
                 showlegend=idx == 0,
                 hoverinfo='skip'
             ))
 
-        # Lights (as glowing spheres)
+        # Horizontal strip across all vertical strips (headboard look)
+        if strips:
+            first_strip_x = strips[0]["x"]
+            last_strip = strips[-1]
+            last_strip_x_end = last_strip["x"] + last_strip["width"]
+            horizontal_strip_width = last_strip_x_end - first_strip_x
+            horizontal_strip_height = 4  # Horizontal strip thickness
+            horizontal_strip_z = bed_height + headboard_height - horizontal_strip_height / 2
+
+            fig.add_trace(go.Mesh3d(
+                x=[first_strip_x, last_strip_x_end, last_strip_x_end, first_strip_x,
+                   first_strip_x, last_strip_x_end, last_strip_x_end, first_strip_x],
+                y=[strip_y_start, strip_y_start, total_room_depth, total_room_depth, strip_y_start, strip_y_start, total_room_depth, total_room_depth],
+                z=[horizontal_strip_z, horizontal_strip_z, horizontal_strip_z, horizontal_strip_z,
+                   horizontal_strip_z + horizontal_strip_height, horizontal_strip_z + horizontal_strip_height,
+                   horizontal_strip_z + horizontal_strip_height, horizontal_strip_z + horizontal_strip_height],
+                i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
+                j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
+                k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
+                color='#696969',  # Dark grey
+                opacity=0.9,
+                name='Horizontal Strip',
+                showlegend=True,
+                hoverinfo='skip'
+            ))
+
+        # Lights (on the wall, not nightstands)
         lights = positions["lights"]
-        light_height = ns_height + 12  # Above nightstands
+        light_z = bed_height + 24  # On wall, above bed height
+        light_y = total_room_depth - 1  # On the wall surface
         light_radius = 3
 
         # Create sphere coordinates
@@ -1086,8 +1110,8 @@ class RoomLayoutVisualizer:
         # Left light
         fig.add_trace(go.Surface(
             x=x_sphere + lights["left"],
-            y=y_sphere + bed_depth / 2,
-            z=z_sphere + light_height,
+            y=y_sphere + light_y,
+            z=z_sphere + light_z,
             colorscale=[[0, '#ffd700'], [1, '#ffd700']],
             showscale=False,
             name='Lights',
@@ -1099,8 +1123,8 @@ class RoomLayoutVisualizer:
         # Right light
         fig.add_trace(go.Surface(
             x=x_sphere + lights["right"],
-            y=y_sphere + bed_depth / 2,
-            z=z_sphere + light_height,
+            y=y_sphere + light_y,
+            z=z_sphere + light_z,
             colorscale=[[0, '#ffd700'], [1, '#ffd700']],
             showscale=False,
             showlegend=False,
@@ -1108,15 +1132,41 @@ class RoomLayoutVisualizer:
             opacity=0.9
         ))
 
+        # Add gap measurements as 3D annotations
+        annotation_z = strip_z_end + 5  # Above the strips
+        for idx, strip in enumerate(strips):
+            strip_x = strip["x"]
+            strip_width = strip["width"]
+
+            # Gap after this strip
+            if idx < len(strips) - 1:
+                next_strip = strips[idx + 1]
+                gap_start = strip_x + strip_width
+                gap_end = next_strip["x"]
+                gap_size = gap_end - gap_start
+                gap_center_x = (gap_start + gap_end) / 2
+
+                fig.add_trace(go.Scatter3d(
+                    x=[gap_center_x],
+                    y=[total_room_depth],
+                    z=[annotation_z],
+                    mode='text',
+                    text=[f'{gap_size:.1f}"'],
+                    textfont=dict(size=10, color='#9c27b0'),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
+
         # Layout configuration
         mode_desc = {
+            LayoutMode.EVEN_GAPS: "Even Gaps",
             LayoutMode.START_LEFT: "Start Left",
             LayoutMode.START_RIGHT: "Start Right",
             LayoutMode.VARIABLE_GAPS: "Variable Gaps"
         }.get(self.layout_mode, "Unknown")
 
         fig.update_layout(
-            title=f'3D Room Layout - {mode_desc} Mode<br>Room: {room_width:.1f}" × {bed_depth:.1f}" | Bed: {bed_width:.1f}" × {bed_depth:.1f}"',
+            title=f'3D Room Layout - {mode_desc} Mode<br>Room: {room_width:.1f}" × {total_room_depth:.1f}" | Bed: {bed_width:.1f}" × {bed_depth:.1f}"',
             scene=dict(
                 xaxis=dict(title='Width (inches)', backgroundcolor='rgb(230, 230,230)', gridcolor='white', showbackground=True),
                 yaxis=dict(title='Depth (inches)', backgroundcolor='rgb(230, 230,230)', gridcolor='white', showbackground=True),
@@ -1131,7 +1181,8 @@ class RoomLayoutVisualizer:
             showlegend=True,
             legend=dict(x=0.7, y=0.9),
             margin=dict(l=0, r=0, b=0, t=40),
-            height=700
+            height=700,
+            uirevision='constant'  # Preserve camera angle when data changes
         )
 
         return fig

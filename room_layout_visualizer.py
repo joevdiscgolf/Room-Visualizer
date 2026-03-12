@@ -8,7 +8,7 @@ All dimensions are configurable with sliders.
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.widgets import Slider, CheckButtons
+from matplotlib.widgets import Slider
 import numpy as np
 
 # Initial configuration (all in inches)
@@ -21,6 +21,8 @@ INITIAL_CONFIG = {
     "num_strips": 15,  # Number of headboard strips across entire wall
     "bed_depth": 80.0,  # Depth of bed (front to back)
     "even_gap_size": 15.0,  # Gap size for even gaps mode
+    "start_left_gap_size": 15.0,  # Gap size for start left mode
+    "start_right_gap_size": 15.0,  # Gap size for start right mode
     "outer_gap_size": 15.0,  # Gap size outside lights (variable mode)
     "inner_gap_size": 10.0,  # Gap size between lights (variable mode)
     "num_inner_gaps": 3,  # Number of gaps between the two lights (variable mode)
@@ -38,26 +40,23 @@ class RoomLayoutVisualizer:
     def __init__(self):
         self.config = INITIAL_CONFIG.copy()
         self.layout_mode = LayoutMode.EVEN_GAPS
-        self.view_mode = "top"  # "top" or "side"
 
         # Calculate initial bed width from constraint
         self._update_bed_width()
 
         # Create figure and axes - reasonable size that fits on screen
-        self.fig, self.ax = plt.subplots(figsize=(18, 12))
-        plt.subplots_adjust(left=0.07, bottom=0.32, right=0.80, top=0.95)
+        self.fig, self.ax = plt.subplots(figsize=(16, 11))
+        self.fig.set_facecolor('#fafbfc')
+        plt.subplots_adjust(left=0.06, bottom=0.34, right=0.97, top=0.93)
 
-        # Initial draw
-        self.draw_layout()
+        # Create mode selector (at top, above sliders)
+        self._create_mode_selector()
 
         # Create sliders
         self._create_sliders()
 
-        # Create mode selector
-        self._create_mode_selector()
-
-        # Create view toggle
-        self._create_view_toggle()
+        # Initial draw
+        self.draw_layout()
 
     def _update_bed_width(self):
         """Calculate bed width based on right light position constraint."""
@@ -71,7 +70,7 @@ class RoomLayoutVisualizer:
         self.bed_width = right_light_pos - wall_gap - nightstand_width - (nightstand_width / 2)
 
     def _create_sliders(self):
-        """Create sliders for adjustable parameters."""
+        """Create sliders for adjustable parameters with improved styling."""
         slider_configs = [
             ("room_width", 100, 200, "Room Width (in)"),
             ("nightstand_width", 18, 36, "Nightstand Width (in)"),
@@ -89,75 +88,158 @@ class RoomLayoutVisualizer:
         self.sliders = {}
         slider_height = 0.018
         slider_spacing = 0.024
-        start_y = 0.27
+        start_y = 0.26
+
+        # Color scheme for sliders
+        slider_color = '#3498db'
+        track_color = '#ecf0f1'
 
         for idx, (key, min_val, max_val, label) in enumerate(slider_configs):
             y_pos = start_y - idx * slider_spacing
             ax_slider = plt.axes([0.15, y_pos, 0.70, slider_height])
+            ax_slider.set_facecolor(track_color)
+
             slider = Slider(
                 ax_slider, label, min_val, max_val,
-                valinit=self.config[key], valstep=0.5 if key != "num_strips" else 1
+                valinit=self.config[key], valstep=0.5 if key != "num_strips" and key != "num_inner_gaps" else 1,
+                color=slider_color,
+                initcolor='none'
             )
+            # Style the slider components
+            slider.label.set_fontsize(9)
+            slider.label.set_fontweight('bold')
+            slider.label.set_color('#2c3e50')
+            slider.valtext.set_fontsize(9)
+            slider.valtext.set_fontweight('bold')
+            slider.valtext.set_color('#2c3e50')
+
             slider.on_changed(lambda val, k=key: self._on_slider_change(k, val))
             self.sliders[key] = slider
 
     def _create_mode_selector(self):
-        """Create radio buttons for layout mode selection - on right side of diagram."""
-        from matplotlib.widgets import RadioButtons
+        """Create custom toggle buttons for layout mode selection - horizontal at top."""
+        self.mode_buttons = []
+        self.mode_button_axes = []
+        mode_labels = ['Even Gaps', 'Start Left', 'Start Right', 'Variable Gaps']
 
-        # Position on the right side of the figure, next to the diagram
-        ax_radio = plt.axes([0.82, 0.55, 0.17, 0.15])
-        ax_radio.set_facecolor('#f8f9fa')
-        for spine in ax_radio.spines.values():
-            spine.set_linewidth(1.5)
-            spine.set_color('#dee2e6')
+        # Title for mode selector - positioned at top left
+        ax_title = plt.axes([0.07, 0.295, 0.08, 0.02])
+        ax_title.set_xlim(0, 1)
+        ax_title.set_ylim(0, 1)
+        ax_title.axis('off')
+        ax_title.text(0.5, 0.5, 'LAYOUT MODE:', ha='center', va='center',
+                     fontsize=10, fontweight='bold', color='#2c3e50')
 
-        self.radio = RadioButtons(
-            ax_radio,
-            ('Even Gaps', 'Start Left', 'Start Right', 'Variable Gaps'),
-            active=0
-        )
-        self.radio.on_clicked(self._on_mode_change)
+        # Horizontal buttons next to the title
+        button_width = 0.12
+        button_spacing = 0.008
+        start_x = 0.16
+        button_y = 0.29
 
-    def _create_view_toggle(self):
-        """Create radio buttons for view selection - on right side of diagram."""
-        from matplotlib.widgets import RadioButtons
+        for idx, label in enumerate(mode_labels):
+            x_pos = start_x + idx * (button_width + button_spacing)
+            ax_btn = plt.axes([x_pos, button_y, button_width, 0.025])
+            ax_btn.set_xlim(0, 1)
+            ax_btn.set_ylim(0, 1)
+            ax_btn.axis('off')
 
-        # Position on the right side of the figure, below the mode selector
-        ax_view = plt.axes([0.82, 0.42, 0.17, 0.10])
-        ax_view.set_facecolor('#f8f9fa')
-        for spine in ax_view.spines.values():
-            spine.set_linewidth(1.5)
-            spine.set_color('#dee2e6')
+            # Store for click handling
+            ax_btn.mode_label = label
+            ax_btn.mode_idx = idx
+            self.mode_button_axes.append(ax_btn)
 
-        self.view_radio = RadioButtons(
-            ax_view,
-            ('Top View', 'Side View'),
-            active=0
-        )
-        self.view_radio.on_clicked(self._on_view_change)
+            # Connect click event for the entire axis
+            ax_btn.figure.canvas.mpl_connect('button_press_event',
+                lambda event, ax=ax_btn, lbl=label: self._on_mode_button_click(event, ax, lbl))
 
-    def _on_view_change(self, label):
-        """Handle view mode change."""
-        self.view_mode = "top" if label == "Top View" else "side"
-        self.draw_layout()
+        # Draw initial state
+        self._update_mode_buttons()
+
+    def _update_mode_buttons(self):
+        """Update the visual appearance of mode buttons."""
+        mode_labels = ['Even Gaps', 'Start Left', 'Start Right', 'Variable Gaps']
+        mode_map = {
+            'Even Gaps': LayoutMode.EVEN_GAPS,
+            'Start Left': LayoutMode.START_LEFT,
+            'Start Right': LayoutMode.START_RIGHT,
+            'Variable Gaps': LayoutMode.VARIABLE_GAPS
+        }
+
+        for idx, ax in enumerate(self.mode_button_axes):
+            ax.clear()
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.axis('off')
+
+            label = mode_labels[idx]
+            is_selected = (mode_map[label] == self.layout_mode)
+
+            # Draw button background
+            if is_selected:
+                bg_color = '#3498db'
+                text_color = 'white'
+                edge_color = '#2980b9'
+            else:
+                bg_color = '#ecf0f1'
+                text_color = '#2c3e50'
+                edge_color = '#bdc3c7'
+
+            # Rounded rectangle background
+            btn_rect = patches.FancyBboxPatch(
+                (0.02, 0.08), 0.96, 0.84,
+                boxstyle=patches.BoxStyle("Round", pad=0.02, rounding_size=0.3),
+                facecolor=bg_color, edgecolor=edge_color, linewidth=2,
+                transform=ax.transAxes, zorder=1
+            )
+            ax.add_patch(btn_rect)
+
+            # Radio indicator (smaller for horizontal layout)
+            indicator_x = 0.10
+            indicator_y = 0.5
+
+            outer_circle = patches.Circle(
+                (indicator_x, indicator_y), 0.15,
+                facecolor='white', edgecolor=edge_color, linewidth=1.5,
+                transform=ax.transAxes, zorder=2
+            )
+            ax.add_patch(outer_circle)
+
+            if is_selected:
+                inner_circle = patches.Circle(
+                    (indicator_x, indicator_y), 0.08,
+                    facecolor='#2980b9', edgecolor='none',
+                    transform=ax.transAxes, zorder=3
+                )
+                ax.add_patch(inner_circle)
+
+            # Label text (centered in remaining space)
+            ax.text(0.55, 0.5, label, ha='center', va='center',
+                   fontsize=9, fontweight='bold' if is_selected else 'normal',
+                   color=text_color, transform=ax.transAxes, zorder=4)
+
+        plt.draw()
+
+    def _on_mode_button_click(self, event, ax, label):
+        """Handle click on mode button."""
+        if event.inaxes != ax:
+            return
+
+        mode_map = {
+            'Even Gaps': LayoutMode.EVEN_GAPS,
+            'Start Left': LayoutMode.START_LEFT,
+            'Start Right': LayoutMode.START_RIGHT,
+            'Variable Gaps': LayoutMode.VARIABLE_GAPS
+        }
+
+        if label in mode_map:
+            self.layout_mode = mode_map[label]
+            self._update_mode_buttons()
+            self.draw_layout()
 
     def _on_slider_change(self, key, val):
         """Handle slider value changes."""
         self.config[key] = val
         self._update_bed_width()
-        self.draw_layout()
-
-    def _on_mode_change(self, label):
-        """Handle mode selection change."""
-        if label == 'Even Gaps':
-            self.layout_mode = LayoutMode.EVEN_GAPS
-        elif label == 'Start Left':
-            self.layout_mode = LayoutMode.START_LEFT
-        elif label == 'Start Right':
-            self.layout_mode = LayoutMode.START_RIGHT
-        elif label == 'Variable Gaps':
-            self.layout_mode = LayoutMode.VARIABLE_GAPS
         self.draw_layout()
 
     def draw_layout(self):
@@ -175,27 +257,17 @@ class RoomLayoutVisualizer:
         self._draw_lights(positions)
         self._draw_dimensions(positions)
 
-        # Set axis properties based on view mode
+        # Set axis properties for top view
         bed_depth = self.config["bed_depth"]
         strip_data = positions["strips"]
         num_strips = len(strip_data["strips"])
         gap_width = strip_data.get("gap_width", 0)
         mode = strip_data.get("mode", "even")
 
-        if self.view_mode == "top":
-            self.ax.set_xlim(-10, self.config["room_width"] + 10)
-            self.ax.set_ylim(-25, bed_depth + 55)
-            self.ax.set_xlabel('Distance from Left Wall (inches)', fontsize=11, fontweight='bold')
-            self.ax.set_ylabel('Depth from Wall (inches)', fontsize=11, fontweight='bold')
-            view_label = "Top-Down View"
-        else:
-            # Side view
-            self.ax.set_xlim(-10, self.config["room_width"] + 10)
-            self.ax.set_ylim(-15, 125)
-            self.ax.set_xlabel('Distance from Left Wall (inches)', fontsize=11, fontweight='bold')
-            self.ax.set_ylabel('Height (inches)', fontsize=11, fontweight='bold')
-            view_label = "Side/Front View"
-
+        self.ax.set_xlim(-10, self.config["room_width"] + 10)
+        self.ax.set_ylim(-25, bed_depth + 55)
+        self.ax.set_xlabel('Distance from Left Wall (inches)', fontsize=11, fontweight='bold')
+        self.ax.set_ylabel('Depth from Wall (inches)', fontsize=11, fontweight='bold')
         self.ax.set_aspect('equal')
 
         # Create title with summary
@@ -205,7 +277,7 @@ class RoomLayoutVisualizer:
             outer_gap = strip_data.get("outer_gap", 0)
             inner_gap = strip_data.get("inner_gap", 0)
             num_inner = strip_data.get("num_inner_gaps", 0)
-            mode_desc = f"Variable (Outer: {outer_gap:.2f}\" for lights, Inner: {inner_gap:.2f}\" × {num_inner} auto-calc)"
+            mode_desc = f"Variable (Outer: {outer_gap:.2f}\" for lights, Inner: {inner_gap:.2f}\" x {num_inner} auto-calc)"
         else:
             mode_desc = {
                 "even": f"Even gaps ({gap_width:.2f}\" auto-calc to center left light)",
@@ -214,9 +286,9 @@ class RoomLayoutVisualizer:
             }.get(mode, "")
 
         title_text = (
-            f'Room Layout Visualizer ({view_label})\n'
+            f'Room Layout Visualizer\n'
             f'Room: {self.config["room_width"]:.1f}" | '
-            f'Bed: {positions["bed"]["width"]:.1f}" × {bed_depth:.1f}" | '
+            f'Bed: {positions["bed"]["width"]:.1f}" x {bed_depth:.1f}" | '
             f'{num_strips} Strips @ {self.config["strip_width"]}"ea = {total_strip_width:.1f}" | '
             f'{mode_desc}'
         )
@@ -638,10 +710,7 @@ class RoomLayoutVisualizer:
 
     def _draw_strips(self, positions):
         """Draw headboard strips and wall measurements."""
-        if self.view_mode == "top":
-            self._draw_strips_top_view(positions)
-        else:
-            self._draw_strips_side_view(positions)
+        self._draw_strips_top_view(positions)
 
     def _draw_strips_top_view(self, positions):
         """Draw strips in top-down view."""
@@ -722,83 +791,6 @@ class RoomLayoutVisualizer:
         # Mark bed boundaries
         self.ax.axvline(x=bed_start, color='blue', linewidth=1, linestyle=':', alpha=0.5, ymin=0.7, ymax=0.85)
         self.ax.axvline(x=bed_end, color='blue', linewidth=1, linestyle=':', alpha=0.5, ymin=0.7, ymax=0.85)
-
-    def _draw_strips_side_view(self, positions):
-        """Draw strips in side/front view (as they would appear on the wall)."""
-        strip_data = positions["strips"]
-        strips = strip_data["strips"]
-        mode = strip_data.get("mode", "even")
-        leftover = strip_data.get("leftover", 0)
-
-        room_width = self.config["room_width"]
-        wall_height = 100  # Visual wall height for side view
-
-        # Draw wall background
-        wall_rect = patches.Rectangle(
-            (0, 0), room_width, wall_height,
-            linewidth=3, edgecolor='#654321', facecolor='#f5deb3', alpha=0.3, zorder=1
-        )
-        self.ax.add_patch(wall_rect)
-
-        # Draw strips as vertical elements
-        for idx, strip in enumerate(strips):
-            strip_x = strip["x"]
-            strip_w = strip["width"]
-
-            # Strip extends full height of wall
-            strip_rect = patches.Rectangle(
-                (strip_x, 0), strip_w, wall_height,
-                linewidth=2, edgecolor='#8b0000', facecolor='#8b4513', zorder=3,
-                label='Headboard Strips' if idx == 0 else ''
-            )
-            self.ax.add_patch(strip_rect)
-
-            # Label strip number
-            self.ax.text(
-                strip_x + strip_w / 2, wall_height / 2,
-                str(idx + 1), ha='center', va='center',
-                fontsize=10, fontweight='bold', color='white', rotation=0
-            )
-
-            # Show gap measurements
-            if idx == 0:
-                gap_start = 0
-                gap_end = strip_x
-                if gap_end - gap_start > 0.1:
-                    self.ax.text(
-                        (gap_start + gap_end) / 2, wall_height + 5,
-                        f'{gap_end - gap_start:.2f}"',
-                        ha='center', va='bottom', fontsize=8, color='#9c27b0',
-                        fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='#9c27b0')
-                    )
-
-            if idx < len(strips) - 1:
-                next_strip = strips[idx + 1]
-                gap_start = strip_x + strip_w
-                gap_end = next_strip["x"]
-                gap_size = gap_end - gap_start
-                self.ax.text(
-                    (gap_start + gap_end) / 2, wall_height + 5,
-                    f'{gap_size:.2f}"',
-                    ha='center', va='bottom', fontsize=8, color='#9c27b0',
-                    fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7, edgecolor='#9c27b0')
-                )
-            else:
-                gap_start = strip_x + strip_w
-                gap_end = room_width
-                if gap_end - gap_start > 0.1:
-                    label = f'Leftover: {leftover:.2f}"' if mode in ["start_left", "start_right"] else f'{gap_end - gap_start:.2f}"'
-                    self.ax.text(
-                        (gap_start + gap_end) / 2, wall_height + 5,
-                        label,
-                        ha='center', va='bottom', fontsize=8,
-                        color='gray' if mode in ["start_left", "start_right"] else '#9c27b0',
-                        fontweight='bold',
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.7,
-                                edgecolor='gray' if mode in ["start_left", "start_right"] else '#9c27b0')
-                    )
 
     def _draw_gap_region(self, start_x, end_x, y, height, label, color):
         """Draw a gap region with label."""
@@ -913,13 +905,12 @@ class RoomLayoutVisualizer:
         right_light_constraint = self.config["right_light_from_left_wall"]
         match = abs(right_light_calc - right_light_constraint) < 0.1
 
-        if self.view_mode == "top":
-            self.ax.text(
-                self.config["room_width"] / 2, -18,
-                f'Lights (centered on nightstands) - Left: {lights["left"]:.1f}" | Right: {right_light_actual:.1f}" (target: {right_light_constraint:.1f}") {"✓" if match else "✗"}',
-                ha='center', fontsize=9, color='green' if match else 'red', fontweight='bold',
-                bbox=dict(boxstyle='round,pad=0.4', facecolor='white', alpha=0.9, linewidth=1.5)
-            )
+        self.ax.text(
+            self.config["room_width"] / 2, -18,
+            f'Lights (centered on nightstands) - Left: {lights["left"]:.1f}" | Right: {right_light_actual:.1f}" (target: {right_light_constraint:.1f}") {"OK" if match else "X"}',
+            ha='center', fontsize=9, color='green' if match else 'red', fontweight='bold',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='white', alpha=0.9, linewidth=1.5)
+        )
 
         # Legend - position it in upper right inside the plot
         self.ax.legend(loc='upper right', fontsize=9, framealpha=0.95,

@@ -20,21 +20,6 @@ st.markdown("Interactive headboard strip and lighting planner - all dimensions i
 
 # Sidebar controls
 with st.sidebar:
-    st.header("Room Settings")
-
-    room_width = st.slider("Room Width (in)", 100.0, 200.0, INITIAL_CONFIG["room_width"], 0.5)
-    nightstand_width = st.slider("Nightstand Width (in)", 18.0, 36.0, INITIAL_CONFIG["nightstand_width"], 0.5)
-    strip_width = st.slider("Strip Width (in)", 2.0, 10.0, INITIAL_CONFIG["strip_width"], 0.5)
-    right_light_pos = st.slider("Right Light from Left Wall (in)", 80.0, 120.0, INITIAL_CONFIG["right_light_from_left_wall"], 0.5)
-    wall_gap = st.slider("Wall Gap (in)", 0.0, 40.0, INITIAL_CONFIG["wall_gap"], 0.5)
-    num_strips = st.slider("Number of Strips", 5, 30, INITIAL_CONFIG["num_strips"], 1)
-    bed_depth = st.slider("Bed Depth (in)", 60.0, 100.0, INITIAL_CONFIG["bed_depth"], 0.5)
-
-    st.header("Advanced Settings (Variable Mode)")
-    outer_gap_size = st.slider("Gap Size - Outer (Variable Mode) (in)", 5.0, 30.0, INITIAL_CONFIG["outer_gap_size"], 0.5)
-    inner_gap_size = st.slider("Gap Size - Inner (Variable Mode) (in)", 5.0, 30.0, INITIAL_CONFIG["inner_gap_size"], 0.5)
-    num_inner_gaps = st.slider("Num Inner Gaps (Variable Mode)", 1, 10, INITIAL_CONFIG["num_inner_gaps"], 1)
-
     st.header("Layout Mode")
     layout_mode_name = st.radio(
         "Strip Layout",
@@ -43,6 +28,44 @@ with st.sidebar:
 
     st.header("View Mode")
     view_mode_name = st.radio("View", ["Top View", "Side View"])
+
+    st.header("Room Settings")
+    room_width = st.slider("Room Width (in)", 100.0, 200.0, INITIAL_CONFIG["room_width"], 0.5)
+    nightstand_width = st.slider("Nightstand Width (in)", 18.0, 36.0, INITIAL_CONFIG["nightstand_width"], 0.5)
+    strip_width = st.slider("Strip Width (in)", 2.0, 10.0, INITIAL_CONFIG["strip_width"], 0.5)
+    right_light_pos = st.slider("Right Light from Left Wall (in)", 80.0, 120.0, INITIAL_CONFIG["right_light_from_left_wall"], 0.5)
+    wall_gap = st.slider("Wall Gap (in)", 0.0, 40.0, INITIAL_CONFIG["wall_gap"], 0.5)
+    num_strips = st.slider("Number of Strips", 5, 30, INITIAL_CONFIG["num_strips"], 1)
+    bed_depth = st.slider("Bed Depth (in)", 60.0, 100.0, INITIAL_CONFIG["bed_depth"], 0.5)
+
+    # Mode-specific settings
+    if layout_mode_name == "Start Left":
+        st.header("Start Left Settings")
+        start_left_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_left_gap_size", 15.0), 0.5)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
+    elif layout_mode_name == "Start Right":
+        st.header("Start Right Settings")
+        start_right_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_right_gap_size", 15.0), 0.5)
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
+    elif layout_mode_name == "Variable Gaps":
+        st.header("Variable Gaps Settings")
+        outer_gap_size = st.slider("Outer Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG["outer_gap_size"], 0.5)
+        inner_gap_size = st.slider("Inner Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG["inner_gap_size"], 0.5)
+        num_inner_gaps = st.slider("Num Inner Gaps", 1, 10, INITIAL_CONFIG["num_inner_gaps"], 1)
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+    else:  # Even Gaps - no extra settings needed
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
 
 # Map radio button selections to internal values
 layout_mode_map = {
@@ -61,6 +84,8 @@ config = {
     "wall_gap": wall_gap,
     "num_strips": num_strips,
     "bed_depth": bed_depth,
+    "start_left_gap_size": start_left_gap_size,
+    "start_right_gap_size": start_right_gap_size,
     "outer_gap_size": outer_gap_size,
     "inner_gap_size": inner_gap_size,
     "num_inner_gaps": num_inner_gaps,

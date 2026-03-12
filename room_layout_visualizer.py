@@ -39,7 +39,7 @@ class LayoutMode:
 class RoomLayoutVisualizer:
     def __init__(self):
         self.config = INITIAL_CONFIG.copy()
-        self.layout_mode = LayoutMode.EVEN_GAPS
+        self.layout_mode = LayoutMode.START_LEFT
 
         # Calculate initial bed width from constraint
         self._update_bed_width()
@@ -72,6 +72,14 @@ class RoomLayoutVisualizer:
     def _create_sliders(self):
         """Create sliders for adjustable parameters with improved styling."""
         slider_configs = [
+            # Mode-specific settings (at top)
+            ("even_gap_size", 5, 30, "Gap Size - Even Mode (in)"),
+            ("start_left_gap_size", 5, 30, "Gap Size - Start Left Mode (in)"),
+            ("start_right_gap_size", 5, 30, "Gap Size - Start Right Mode (in)"),
+            ("outer_gap_size", 5, 30, "Outer Gap - Variable Mode (in)"),
+            ("inner_gap_size", 5, 30, "Inner Gap - Variable Mode (in)"),
+            ("num_inner_gaps", 1, 10, "Num Inner Gaps - Variable Mode"),
+            # Room settings (below)
             ("room_width", 100, 200, "Room Width (in)"),
             ("nightstand_width", 18, 36, "Nightstand Width (in)"),
             ("strip_width", 2, 10, "Strip Width (in)"),
@@ -79,10 +87,6 @@ class RoomLayoutVisualizer:
             ("wall_gap", 0, 40, "Wall Gap (in)"),
             ("num_strips", 5, 30, "Number of Strips"),
             ("bed_depth", 60, 100, "Bed Depth (in)"),
-            ("even_gap_size", 5, 30, "Gap Size - Even Mode (in)"),
-            ("outer_gap_size", 5, 30, "Gap Size - Outer (Variable Mode) (in)"),
-            ("inner_gap_size", 5, 30, "Gap Size - Inner (Variable Mode) (in)"),
-            ("num_inner_gaps", 1, 10, "Num Inner Gaps (Variable Mode)"),
         ]
 
         self.sliders = {}
@@ -120,7 +124,7 @@ class RoomLayoutVisualizer:
         """Create custom toggle buttons for layout mode selection - horizontal at top."""
         self.mode_buttons = []
         self.mode_button_axes = []
-        mode_labels = ['Even Gaps', 'Start Left', 'Start Right', 'Variable Gaps']
+        mode_labels = ['Start Left', 'Start Right', 'Variable Gaps']
 
         # Title for mode selector - positioned at top left
         ax_title = plt.axes([0.07, 0.295, 0.08, 0.02])
@@ -157,9 +161,8 @@ class RoomLayoutVisualizer:
 
     def _update_mode_buttons(self):
         """Update the visual appearance of mode buttons."""
-        mode_labels = ['Even Gaps', 'Start Left', 'Start Right', 'Variable Gaps']
+        mode_labels = ['Start Left', 'Start Right', 'Variable Gaps']
         mode_map = {
-            'Even Gaps': LayoutMode.EVEN_GAPS,
             'Start Left': LayoutMode.START_LEFT,
             'Start Right': LayoutMode.START_RIGHT,
             'Variable Gaps': LayoutMode.VARIABLE_GAPS
@@ -225,7 +228,6 @@ class RoomLayoutVisualizer:
             return
 
         mode_map = {
-            'Even Gaps': LayoutMode.EVEN_GAPS,
             'Start Left': LayoutMode.START_LEFT,
             'Start Right': LayoutMode.START_RIGHT,
             'Variable Gaps': LayoutMode.VARIABLE_GAPS

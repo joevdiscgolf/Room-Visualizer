@@ -23,7 +23,7 @@ with st.sidebar:
     st.header("Layout Mode")
     layout_mode_name = st.radio(
         "Strip Layout",
-        ["Even Gaps", "Start Left", "Start Right", "Variable Gaps"]
+        ["Start Left", "Start Right", "Variable Gaps"]
     )
 
     st.header("View Mode")
@@ -60,16 +60,9 @@ with st.sidebar:
         num_inner_gaps = st.slider("Num Inner Gaps", 1, 10, INITIAL_CONFIG["num_inner_gaps"], 1)
         start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
         start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
-    else:  # Even Gaps - no extra settings needed
-        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
-        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
-        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
-        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
-        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
 
 # Map radio button selections to internal values
 layout_mode_map = {
-    "Even Gaps": LayoutMode.EVEN_GAPS,
     "Start Left": LayoutMode.START_LEFT,
     "Start Right": LayoutMode.START_RIGHT,
     "Variable Gaps": LayoutMode.VARIABLE_GAPS,

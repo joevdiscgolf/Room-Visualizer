@@ -418,14 +418,12 @@ class RoomLayoutVisualizer:
         strips = []
         current_x = 0  # Start flush at left wall
 
-        for i in range(num_strips):
-            if current_x + strip_width > room_width:
-                break
-
+        # Continue adding strips until we run out of room
+        while current_x + strip_width <= room_width:
             strips.append({
                 "x": current_x,
                 "width": strip_width,
-                "gap_before": gap_width if i > 0 else 0,
+                "gap_before": gap_width if len(strips) > 0 else 0,
             })
             current_x += strip_width + gap_width
 
@@ -570,7 +568,8 @@ class RoomLayoutVisualizer:
         # RIGHT SIDE: Continue with outer_gap pattern from after last inner strip
         # Start at the position after last inner strip + outer_gap
         current_x = last_inner_strip_x + strip_width + outer_gap
-        while current_x + strip_width <= room_width:
+        # Continue adding strips all the way to the right edge
+        while current_x + strip_width <= room_width + 0.01:  # Small epsilon for floating point
             strips.append({"x": current_x, "width": strip_width})
             current_x += strip_width + outer_gap
 

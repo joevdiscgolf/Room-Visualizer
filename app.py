@@ -105,7 +105,7 @@ viz._update_bed_width()
 # Create and display visualization based on render mode
 if render_mode == "3D":
     fig_3d = viz.create_3d_layout()
-    st.plotly_chart(fig_3d, use_container_width=True)
+    st.plotly_chart(fig_3d, use_container_width=True, key="room_3d_viz")
 else:
     fig, ax = plt.subplots(figsize=(18, 12))
     viz.ax = ax

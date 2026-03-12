@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Slider
 import numpy as np
+import plotly.graph_objects as go
 
 # Initial configuration (all in inches)
 INITIAL_CONFIG = {
@@ -917,6 +918,223 @@ class RoomLayoutVisualizer:
         # Legend - position it in upper right inside the plot
         self.ax.legend(loc='upper right', fontsize=9, framealpha=0.95,
                       edgecolor='black', fancybox=True, shadow=True)
+
+    def create_3d_layout(self):
+        """Create a 3D plotly visualization of the room layout."""
+        positions = self._calculate_positions()
+
+        room_width = self.config["room_width"]
+        bed_depth = self.config["bed_depth"]
+        wall_height = 100  # Height of walls in inches
+
+        # Create figure
+        fig = go.Figure()
+
+        # Floor
+        fig.add_trace(go.Mesh3d(
+            x=[0, room_width, room_width, 0],
+            y=[0, 0, bed_depth + 20, bed_depth + 20],
+            z=[0, 0, 0, 0],
+            i=[0, 0],
+            j=[1, 2],
+            k=[2, 3],
+            color='#f5f5dc',
+            opacity=0.3,
+            name='Floor',
+            showlegend=True,
+            hoverinfo='skip'
+        ))
+
+        # Left wall
+        fig.add_trace(go.Mesh3d(
+            x=[0, 0, 0, 0],
+            y=[0, bed_depth + 20, bed_depth + 20, 0],
+            z=[0, 0, wall_height, wall_height],
+            i=[0, 0],
+            j=[1, 2],
+            k=[2, 3],
+            color='#8B7355',
+            opacity=0.4,
+            name='Walls',
+            showlegend=True,
+            hoverinfo='skip'
+        ))
+
+        # Right wall
+        fig.add_trace(go.Mesh3d(
+            x=[room_width, room_width, room_width, room_width],
+            y=[0, bed_depth + 20, bed_depth + 20, 0],
+            z=[0, 0, wall_height, wall_height],
+            i=[0, 0],
+            j=[1, 2],
+            k=[2, 3],
+            color='#8B7355',
+            opacity=0.4,
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+        # Back wall (headboard wall)
+        fig.add_trace(go.Mesh3d(
+            x=[0, room_width, room_width, 0],
+            y=[bed_depth + 20, bed_depth + 20, bed_depth + 20, bed_depth + 20],
+            z=[0, 0, wall_height, wall_height],
+            i=[0, 0],
+            j=[1, 2],
+            k=[2, 3],
+            color='#D2B48C',
+            opacity=0.5,
+            name='Back Wall',
+            showlegend=True,
+            hoverinfo='skip'
+        ))
+
+        # Bed
+        bed = positions["bed"]
+        bed_height = 24  # Mattress height in inches
+        bed_x, bed_width = bed["x"], bed["width"]
+
+        fig.add_trace(go.Mesh3d(
+            x=[bed_x, bed_x + bed_width, bed_x + bed_width, bed_x, bed_x, bed_x + bed_width, bed_x + bed_width, bed_x],
+            y=[0, 0, bed_depth, bed_depth, 0, 0, bed_depth, bed_depth],
+            z=[0, 0, 0, 0, bed_height, bed_height, bed_height, bed_height],
+            i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
+            j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
+            k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
+            color='#3498db',
+            opacity=0.7,
+            name='Bed',
+            showlegend=True,
+            hoverinfo='skip'
+        ))
+
+        # Nightstands
+        left_ns = positions["left_nightstand"]
+        right_ns = positions["right_nightstand"]
+        ns_depth = 20
+        ns_height = 24
+        ns_y = (bed_depth - ns_depth) / 2
+
+        # Left nightstand
+        fig.add_trace(go.Mesh3d(
+            x=[left_ns["x"], left_ns["x"] + left_ns["width"], left_ns["x"] + left_ns["width"], left_ns["x"],
+               left_ns["x"], left_ns["x"] + left_ns["width"], left_ns["x"] + left_ns["width"], left_ns["x"]],
+            y=[ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth, ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth],
+            z=[0, 0, 0, 0, ns_height, ns_height, ns_height, ns_height],
+            i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
+            j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
+            k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
+            color='#daa520',
+            opacity=0.9,
+            name='Nightstands',
+            showlegend=True,
+            hoverinfo='skip'
+        ))
+
+        # Right nightstand
+        fig.add_trace(go.Mesh3d(
+            x=[right_ns["x"], right_ns["x"] + right_ns["width"], right_ns["x"] + right_ns["width"], right_ns["x"],
+               right_ns["x"], right_ns["x"] + right_ns["width"], right_ns["x"] + right_ns["width"], right_ns["x"]],
+            y=[ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth, ns_y, ns_y, ns_y + ns_depth, ns_y + ns_depth],
+            z=[0, 0, 0, 0, ns_height, ns_height, ns_height, ns_height],
+            i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
+            j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
+            k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
+            color='#daa520',
+            opacity=0.9,
+            showlegend=False,
+            hoverinfo='skip'
+        ))
+
+        # Headboard strips
+        strip_data = positions["strips"]
+        strips = strip_data["strips"]
+        strip_depth = 3  # Depth of strip coming out from wall
+        strip_y = bed_depth + 20 - strip_depth
+
+        for idx, strip in enumerate(strips):
+            strip_x = strip["x"]
+            strip_width = strip["width"]
+
+            fig.add_trace(go.Mesh3d(
+                x=[strip_x, strip_x + strip_width, strip_x + strip_width, strip_x,
+                   strip_x, strip_x + strip_width, strip_x + strip_width, strip_x],
+                y=[strip_y, strip_y, bed_depth + 20, bed_depth + 20, strip_y, strip_y, bed_depth + 20, bed_depth + 20],
+                z=[0, 0, 0, 0, wall_height, wall_height, wall_height, wall_height],
+                i=[0, 0, 0, 0, 4, 4, 6, 6, 4, 5, 2, 2],
+                j=[1, 2, 4, 5, 5, 6, 7, 2, 0, 1, 3, 6],
+                k=[2, 3, 5, 1, 6, 7, 4, 6, 5, 6, 6, 7],
+                color='#8B4513',
+                opacity=0.9,
+                name='Headboard Strips' if idx == 0 else None,
+                showlegend=idx == 0,
+                hoverinfo='skip'
+            ))
+
+        # Lights (as glowing spheres)
+        lights = positions["lights"]
+        light_height = ns_height + 12  # Above nightstands
+        light_radius = 3
+
+        # Create sphere coordinates
+        u = np.linspace(0, 2 * np.pi, 20)
+        v = np.linspace(0, np.pi, 20)
+        x_sphere = light_radius * np.outer(np.cos(u), np.sin(v))
+        y_sphere = light_radius * np.outer(np.sin(u), np.sin(v))
+        z_sphere = light_radius * np.outer(np.ones(np.size(u)), np.cos(v))
+
+        # Left light
+        fig.add_trace(go.Surface(
+            x=x_sphere + lights["left"],
+            y=y_sphere + bed_depth / 2,
+            z=z_sphere + light_height,
+            colorscale=[[0, '#ffd700'], [1, '#ffd700']],
+            showscale=False,
+            name='Lights',
+            showlegend=True,
+            hoverinfo='skip',
+            opacity=0.9
+        ))
+
+        # Right light
+        fig.add_trace(go.Surface(
+            x=x_sphere + lights["right"],
+            y=y_sphere + bed_depth / 2,
+            z=z_sphere + light_height,
+            colorscale=[[0, '#ffd700'], [1, '#ffd700']],
+            showscale=False,
+            showlegend=False,
+            hoverinfo='skip',
+            opacity=0.9
+        ))
+
+        # Layout configuration
+        mode_desc = {
+            LayoutMode.START_LEFT: "Start Left",
+            LayoutMode.START_RIGHT: "Start Right",
+            LayoutMode.VARIABLE_GAPS: "Variable Gaps"
+        }.get(self.layout_mode, "Unknown")
+
+        fig.update_layout(
+            title=f'3D Room Layout - {mode_desc} Mode<br>Room: {room_width:.1f}" × {bed_depth:.1f}" | Bed: {bed_width:.1f}" × {bed_depth:.1f}"',
+            scene=dict(
+                xaxis=dict(title='Width (inches)', backgroundcolor='rgb(230, 230,230)', gridcolor='white', showbackground=True),
+                yaxis=dict(title='Depth (inches)', backgroundcolor='rgb(230, 230,230)', gridcolor='white', showbackground=True),
+                zaxis=dict(title='Height (inches)', backgroundcolor='rgb(230, 230,230)', gridcolor='white', showbackground=True),
+                camera=dict(
+                    eye=dict(x=1.5, y=-1.5, z=0.8),
+                    center=dict(x=0, y=0, z=0),
+                    up=dict(x=0, y=0, z=1)
+                ),
+                aspectmode='data'
+            ),
+            showlegend=True,
+            legend=dict(x=0.7, y=0.9),
+            margin=dict(l=0, r=0, b=0, t=40),
+            height=700
+        )
+
+        return fig
 
     def show(self):
         """Display the visualizer."""

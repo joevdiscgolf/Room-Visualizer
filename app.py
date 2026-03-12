@@ -26,8 +26,14 @@ with st.sidebar:
         ["Start Left", "Start Right", "Variable Gaps"]
     )
 
+    st.header("Rendering Mode")
+    render_mode = st.radio("Render", ["2D", "3D"])
+
     st.header("View Mode")
-    view_mode_name = st.radio("View", ["Top View", "Side View"])
+    if render_mode == "2D":
+        view_mode_name = st.radio("View", ["Top View", "Side View"])
+    else:
+        view_mode_name = "Top View"  # Default for 3D, though not used
 
     st.header("Room Settings")
     room_width = st.slider("Room Width (in)", 100.0, 200.0, INITIAL_CONFIG["room_width"], 0.5)
@@ -91,16 +97,18 @@ viz.layout_mode = layout_mode_map[layout_mode_name]
 viz.view_mode = "top" if view_mode_name == "Top View" else "side"
 viz._update_bed_width()
 
-# Create the plot
-fig, ax = plt.subplots(figsize=(18, 12))
-viz.ax = ax
-viz.fig = fig
-
-# Draw using the original visualization code
-viz.draw_layout()
-
-# Display in Streamlit
-st.pyplot(fig)
+# Render based on mode
+if render_mode == "3D":
+    # Create and display 3D plotly visualization
+    fig_3d = viz.create_3d_layout()
+    st.plotly_chart(fig_3d, use_container_width=True)
+else:
+    # Create and display 2D matplotlib visualization
+    fig, ax = plt.subplots(figsize=(18, 12))
+    viz.ax = ax
+    viz.fig = fig
+    viz.draw_layout()
+    st.pyplot(fig)
 
 # Summary stats
 positions = viz._calculate_positions()

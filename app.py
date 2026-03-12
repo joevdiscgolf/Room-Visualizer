@@ -23,17 +23,43 @@ with st.sidebar:
     st.header("Layout Mode")
     layout_mode_name = st.radio(
         "Strip Layout",
-        ["Start Left", "Start Right", "Variable Gaps"]
+        ["Even Gaps", "Start Left", "Start Right", "Variable Gaps"]
     )
 
-    st.header("Rendering Mode")
-    render_mode = st.radio("Render", ["2D", "3D"])
-
-    st.header("View Mode")
-    if render_mode == "2D":
-        view_mode_name = st.radio("View", ["Top View", "Side View"])
-    else:
-        view_mode_name = "Top View"  # Default for 3D, though not used
+    # Mode-specific settings (at top, before room settings)
+    if layout_mode_name == "Even Gaps":
+        st.header("Even Gaps Settings")
+        even_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("even_gap_size", 15.0), 0.5)
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
+    elif layout_mode_name == "Start Left":
+        st.header("Start Left Settings")
+        start_left_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_left_gap_size", 15.0), 0.5)
+        even_gap_size = INITIAL_CONFIG.get("even_gap_size", 15.0)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
+    elif layout_mode_name == "Start Right":
+        st.header("Start Right Settings")
+        start_right_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_right_gap_size", 15.0), 0.5)
+        even_gap_size = INITIAL_CONFIG.get("even_gap_size", 15.0)
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
+        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
+    elif layout_mode_name == "Variable Gaps":
+        st.header("Variable Gaps Settings")
+        num_inner_gaps = st.slider("Num Inner Gaps", 1, 10, INITIAL_CONFIG["num_inner_gaps"], 1)
+        st.caption("Gaps auto-calculated to center lights and fill space evenly.")
+        even_gap_size = INITIAL_CONFIG.get("even_gap_size", 15.0)
+        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
+        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
+        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
+        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
 
     st.header("Room Settings")
     room_width = st.slider("Room Width (in)", 100.0, 200.0, INITIAL_CONFIG["room_width"], 0.5)
@@ -44,31 +70,9 @@ with st.sidebar:
     num_strips = st.slider("Number of Strips", 5, 30, INITIAL_CONFIG["num_strips"], 1)
     bed_depth = st.slider("Bed Depth (in)", 60.0, 100.0, INITIAL_CONFIG["bed_depth"], 0.5)
 
-    # Mode-specific settings
-    if layout_mode_name == "Start Left":
-        st.header("Start Left Settings")
-        start_left_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_left_gap_size", 15.0), 0.5)
-        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
-        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
-        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
-        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
-    elif layout_mode_name == "Start Right":
-        st.header("Start Right Settings")
-        start_right_gap_size = st.slider("Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG.get("start_right_gap_size", 15.0), 0.5)
-        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
-        outer_gap_size = INITIAL_CONFIG["outer_gap_size"]
-        inner_gap_size = INITIAL_CONFIG["inner_gap_size"]
-        num_inner_gaps = INITIAL_CONFIG["num_inner_gaps"]
-    elif layout_mode_name == "Variable Gaps":
-        st.header("Variable Gaps Settings")
-        outer_gap_size = st.slider("Outer Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG["outer_gap_size"], 0.5)
-        inner_gap_size = st.slider("Inner Gap Size (in)", 5.0, 30.0, INITIAL_CONFIG["inner_gap_size"], 0.5)
-        num_inner_gaps = st.slider("Num Inner Gaps", 1, 10, INITIAL_CONFIG["num_inner_gaps"], 1)
-        start_left_gap_size = INITIAL_CONFIG.get("start_left_gap_size", 15.0)
-        start_right_gap_size = INITIAL_CONFIG.get("start_right_gap_size", 15.0)
-
 # Map radio button selections to internal values
 layout_mode_map = {
+    "Even Gaps": LayoutMode.EVEN_GAPS,
     "Start Left": LayoutMode.START_LEFT,
     "Start Right": LayoutMode.START_RIGHT,
     "Variable Gaps": LayoutMode.VARIABLE_GAPS,
@@ -83,6 +87,7 @@ config = {
     "wall_gap": wall_gap,
     "num_strips": num_strips,
     "bed_depth": bed_depth,
+    "even_gap_size": even_gap_size,
     "start_left_gap_size": start_left_gap_size,
     "start_right_gap_size": start_right_gap_size,
     "outer_gap_size": outer_gap_size,
@@ -94,21 +99,14 @@ config = {
 viz = RoomLayoutVisualizer.__new__(RoomLayoutVisualizer)
 viz.config = config
 viz.layout_mode = layout_mode_map[layout_mode_name]
-viz.view_mode = "top" if view_mode_name == "Top View" else "side"
 viz._update_bed_width()
 
-# Render based on mode
-if render_mode == "3D":
-    # Create and display 3D plotly visualization
-    fig_3d = viz.create_3d_layout()
-    st.plotly_chart(fig_3d, use_container_width=True)
-else:
-    # Create and display 2D matplotlib visualization
-    fig, ax = plt.subplots(figsize=(18, 12))
-    viz.ax = ax
-    viz.fig = fig
-    viz.draw_layout()
-    st.pyplot(fig)
+# Create and display 2D matplotlib visualization
+fig, ax = plt.subplots(figsize=(18, 12))
+viz.ax = ax
+viz.fig = fig
+viz.draw_layout()
+st.pyplot(fig)
 
 # Summary stats
 positions = viz._calculate_positions()

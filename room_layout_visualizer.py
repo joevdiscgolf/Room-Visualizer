@@ -450,18 +450,22 @@ class RoomLayoutVisualizer:
 
         Pattern: [leftover space] ...|S|--gap--|S|--gap--|S|
         Last strip flush at right wall.
-        Gap size is AUTO-CALCULATED to center the right light in the first gap from the right.
+        Gap size is AUTO-CALCULATED to center the right light in the SECOND gap from the right.
         """
         # Get right light position
         right_light_x = self.config["right_light_from_left_wall"]
 
-        # Auto-calculate gap size to center right light in first gap from right
-        # Last strip: (room_width - strip_width) to room_width
-        # First gap from right: (room_width - strip_width - gap) to (room_width - strip_width)
-        # For light to be centered: (room_width - strip_width) - gap/2 = right_light_x
-        # gap/2 = room_width - strip_width - right_light_x
-        # gap = 2 * (room_width - strip_width - right_light_x)
-        gap_width = 2 * (room_width - strip_width - right_light_x)
+        # Auto-calculate gap size to center right light in SECOND gap from right
+        # Pattern from right to left:
+        #   Last strip: (room_width - strip_width) to room_width
+        #   Gap 1: (room_width - strip_width - gap) to (room_width - strip_width)
+        #   Strip 2: (room_width - 2*strip_width - gap) to (room_width - strip_width - gap)
+        #   Gap 2: (room_width - 2*strip_width - 2*gap) to (room_width - 2*strip_width - gap) ← Light centered here
+        # Gap 2 center = room_width - 2*strip_width - 1.5*gap
+        # For light to be centered: room_width - 2*strip_width - 1.5*gap = right_light_x
+        # 1.5*gap = room_width - 2*strip_width - right_light_x
+        # gap = (room_width - 2*strip_width - right_light_x) / 1.5
+        gap_width = (room_width - 2 * strip_width - right_light_x) / 1.5
 
         # Ensure gap is at least 1 inch
         if gap_width < 1:
@@ -497,16 +501,17 @@ class RoomLayoutVisualizer:
     def _calculate_variable_gaps(self, num_strips, strip_width, room_width, bed_x, bed_width):
         """Calculate strip positions with variable gap sizes.
 
-        Pattern: |S|--left_outer--|S|--inner--|S|--inner--|S|--right_outer--|S|
+        Pattern: |S|--outer_gap--|S|--inner--|S|--inner--|S|--outer_gap--|S|
 
         Constraints:
         1. First strip starts flush at x=0
         2. Last strip ends flush at room_width
-        3. Left light is centered in the gap after the first strip
-        4. Right light is centered in the gap before the last strip
-        5. Inner gaps fill the remaining space evenly
+        3. Outer gaps are THE SAME SIZE on both left and right (to center both lights symmetrically)
+        4. Inner gaps fill the remaining space evenly
 
         All gaps are AUTO-CALCULATED based on strip width and light positions.
+        The outer gap size is calculated as the average of what would center each light,
+        ensuring both outer gaps are equal (only 2 gap sizes total).
         """
         num_inner_gaps = int(self.config["num_inner_gaps"])
 
@@ -516,29 +521,21 @@ class RoomLayoutVisualizer:
         left_light_x = wall_gap + nightstand_width / 2
         right_light_x = self.config["right_light_from_left_wall"]
 
-        # Auto-calculate left outer gap to center left light in gap after first strip
-        # First strip: 0 to strip_width
-        # Gap after first strip: strip_width to (strip_width + left_outer_gap)
-        # For light to be centered: strip_width + left_outer_gap/2 = left_light_x
-        # left_outer_gap = 2 * (left_light_x - strip_width)
-        left_outer_gap = 2 * (left_light_x - strip_width)
-        if left_outer_gap < 1:
-            left_outer_gap = 1
+        # Calculate what outer gap would center each light
+        left_outer_gap_calc = 2 * (left_light_x - strip_width)
+        right_outer_gap_calc = 2 * (room_width - strip_width - right_light_x)
 
-        # Auto-calculate right outer gap to center right light in gap before last strip
-        # Last strip: (room_width - strip_width) to room_width
-        # Gap before last strip: (room_width - strip_width - right_outer_gap) to (room_width - strip_width)
-        # For light to be centered: (room_width - strip_width) - right_outer_gap/2 = right_light_x
-        # right_outer_gap = 2 * (room_width - strip_width - right_light_x)
-        right_outer_gap = 2 * (room_width - strip_width - right_light_x)
-        if right_outer_gap < 1:
-            right_outer_gap = 1
+        # Use the SAME outer gap for both sides (average of the two calculations)
+        # This ensures only 2 gap sizes total (outer and inner)
+        outer_gap = (left_outer_gap_calc + right_outer_gap_calc) / 2
+        if outer_gap < 1:
+            outer_gap = 1
 
         # Calculate inner zone boundaries
-        # After first strip and left outer gap
-        inner_zone_start = strip_width + left_outer_gap
-        # Before right outer gap and last strip
-        inner_zone_end = room_width - strip_width - right_outer_gap
+        # After first strip and outer gap
+        inner_zone_start = strip_width + outer_gap
+        # Before outer gap and last strip
+        inner_zone_end = room_width - strip_width - outer_gap
         inner_zone_width = inner_zone_end - inner_zone_start
 
         # Calculate inner gap size
@@ -569,9 +566,7 @@ class RoomLayoutVisualizer:
 
         return {
             "strips": strips,
-            "outer_gap": (left_outer_gap + right_outer_gap) / 2,  # Average for display
-            "left_outer_gap": left_outer_gap,
-            "right_outer_gap": right_outer_gap,
+            "outer_gap": outer_gap,  # Same for both left and right
             "inner_gap": inner_gap,
             "num_inner_gaps": num_inner_gaps,
             "mode": "variable",
@@ -919,7 +914,7 @@ class RoomLayoutVisualizer:
         bed_depth = self.config["bed_depth"]
         total_room_depth = bed_depth + 48  # Add 48" at foot of bed
         wall_height = 100  # Height of walls in inches
-        headboard_height = 48  # Strips go ~48" above bed (about bed height)
+        headboard_height = 24  # Strips go ~24" above bed (half bed height)
 
         # Create figure
         fig = go.Figure()
